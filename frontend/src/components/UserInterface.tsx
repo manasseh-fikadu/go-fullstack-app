@@ -6,6 +6,8 @@ interface User {
   id: number;
   name: string;
   email: string;
+  created_at: string; 
+  updated_at: string; 
 }
 
 interface UserInterfaceProps {
@@ -15,8 +17,8 @@ interface UserInterfaceProps {
 const UserInterface: React.FC<UserInterfaceProps> = ({ backendName }) => {
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
   const [users, setUsers] = useState<User[]>([]);
-  const [newUser, setNewUser] = useState({ name: '', email: '' });
-  const [updateUser, setUpdateUser] = useState({ id: '', name: '', email: '' });
+  const [newUser, setNewUser] = useState({ name: '', email: ''});
+  const [updateUser, setUpdateUser] = useState({ id: '', name: '', email: ''});
 
   // Define styles based on the backend name
   const backgroundColors: { [key: string]: string } = {
@@ -49,7 +51,8 @@ const UserInterface: React.FC<UserInterfaceProps> = ({ backendName }) => {
     e.preventDefault();
 
     try {
-      const response = await axios.post(`${apiUrl}/api/${backendName}/users`, newUser);
+      // Assume newUser only contains name and email, backend will add timestamps
+      const response = await axios.post(`${apiUrl}/api/${backendName}/users`, {name: newUser.name, email: newUser.email});
       setUsers([response.data, ...users]);
       setNewUser({ name: '', email: '' });
     } catch (error) {
@@ -61,12 +64,15 @@ const UserInterface: React.FC<UserInterfaceProps> = ({ backendName }) => {
   const handleUpdateUser = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     try {
-      await axios.put(`${apiUrl}/api/${backendName}/users/${updateUser.id}`, { name: updateUser.name, email: updateUser.email });
+      // Send only name and email for update, backend handles updated_at
+      const response = await axios.put(`${apiUrl}/api/${backendName}/users/${updateUser.id}`, { name: updateUser.name, email: updateUser.email });
+      const updatedUserFromServer = response.data;
       setUpdateUser({ id: '', name: '', email: '' });
       setUsers(
         users.map((user) => {
           if (user.id === parseInt(updateUser.id)) {
-            return { ...user, name: updateUser.name, email: updateUser.email };
+            // Update user with new name, email, and updated_at from server, keep original created_at
+            return { ...user, name: updatedUserFromServer.name, email: updatedUserFromServer.email, updated_at: updatedUserFromServer.updated_at };
           }
           return user;
         })

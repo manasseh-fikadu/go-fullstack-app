@@ -6,15 +6,18 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/gorilla/mux"
 	_ "github.com/lib/pq"
 )
 
 type User struct {
-	Id       int    `json:"id"`
-	Name		 string `json:"name"`
-	Email    string `json:"email"`
+	Id        int       `json:"id"`
+	Name      string    `json:"name"`
+	Email     string    `json:"email"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 // main function
@@ -27,7 +30,7 @@ func main() {
 	defer db.Close()
 
 	// create table if not exists
-	_, err = db.Exec("CREATE TABLE IF NOT EXISTS users (id SERIAL PRIMARY KEY, name TEXT, email TEXT)")
+	_, err = db.Exec("CREATE TABLE IF NOT EXISTS users (id SERIAL PRIMARY KEY, name TEXT, email TEXT, created_at TIMESTAMP, updated_at TIMESTAMP)")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -86,7 +89,7 @@ func getUsers(db *sql.DB) http.HandlerFunc {
 		users := []User{} // array of users
 		for rows.Next() {
 			var u User
-			if err := rows.Scan(&u.Id, &u.Name, &u.Email); err != nil {
+			if err := rows.Scan(&u.Id, &u.Name, &u.Email, &u.CreatedAt, &u.UpdatedAt); err != nil {
 				log.Fatal(err)
 			}
 			users = append(users, u)
@@ -106,7 +109,7 @@ func getUser(db *sql.DB) http.HandlerFunc {
 		id := vars["id"]
 
 		var u User
-		err := db.QueryRow("SELECT * FROM users WHERE id = $1", id).Scan(&u.Id, &u.Name, &u.Email)
+		err := db.QueryRow("SELECT * FROM users WHERE id = $1", id).Scan(&u.Id, &u.Name, &u.Email, &u.CreatedAt, &u.UpdatedAt)
 		if err != nil {
 			w.WriteHeader(http.StatusNotFound)
 			return
@@ -122,7 +125,10 @@ func createUser(db *sql.DB) http.HandlerFunc {
 		var u User
 		json.NewDecoder(r.Body).Decode(&u)
 
-		err := db.QueryRow("INSERT INTO users (name, email) VALUES ($1, $2) RETURNING id", u.Name, u.Email).Scan(&u.Id)
+		u.CreatedAt = time.Now()
+		u.UpdatedAt = time.Now()
+
+		err := db.QueryRow("INSERT INTO users (name, email, created_at, updated_at) VALUES ($1, $2, $3, $4) RETURNING id", u.Name, u.Email, u.CreatedAt, u.UpdatedAt).Scan(&u.Id)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -139,16 +145,17 @@ func updateUser(db *sql.DB) http.HandlerFunc {
 
 		vars := mux.Vars(r)
 		id := vars["id"]
+		u.UpdatedAt = time.Now()
 
 		// Execute the update query
-		_, err := db.Exec("UPDATE users SET name = $1, email = $2 WHERE id = $3", u.Name, u.Email, id)
+		_, err := db.Exec("UPDATE users SET name = $1, email = $2, updated_at = $3 WHERE id = $4", u.Name, u.Email, u.UpdatedAt, id)
 		if err != nil {
 			log.Fatal(err)
 		}
 
 		// Retrieve the updated user data from the database
 		var updatedUser User
-		err = db.QueryRow("SELECT id, name, email FROM users WHERE id = $1", id).Scan(&updatedUser.Id, &updatedUser.Name, &updatedUser.Email)
+		err = db.QueryRow("SELECT id, name, email, created_at, updated_at FROM users WHERE id = $1", id).Scan(&updatedUser.Id, &updatedUser.Name, &updatedUser.Email, &updatedUser.CreatedAt, &updatedUser.UpdatedAt)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -165,7 +172,7 @@ func deleteUser(db *sql.DB) http.HandlerFunc {
 		id := vars["id"]
 
 		var u User
-		err := db.QueryRow("SELECT * FROM users WHERE id = $1", id).Scan(&u.Id, &u.Name, &u.Email)
+		err := db.QueryRow("SELECT * FROM users WHERE id = $1", id).Scan(&u.Id, &u.Name, &u.Email, &u.CreatedAt, &u.UpdatedAt)
 		if err != nil {
 			w.WriteHeader(http.StatusNotFound)
 			return
